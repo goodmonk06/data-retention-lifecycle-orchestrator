@@ -1,0 +1,28 @@
+{
+  "name": "data-retention-lifecycle-orchestrator",
+  "version": "1.0.0",
+  "description": "A service for managing data retention policies with automated cleanup, anonymization, and archival",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "admin"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w admin\"",
+    "build": "npm run build -w backend && npm run build -w admin",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "keywords": [
+    "data-retention",
+    "gdpr",
+    "compliance",
+    "data-lifecycle"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
