@@ -8,52 +8,153 @@ datasource db {
 }
 
 model DataSource {
-  id            String          @id @default(uuid())
-  name          String          @unique
-  type          String          // 'postgres', 'api', etc.
-  description   String?
-  configJson    String          // JSON string with connection details
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  retentionRules RetentionRule[]
+  id              String          @id @default(uuid())
+  name            String          @unique
+  type            String          // 'postgres', 'api', etc.
+  description     String?
+  configJson      String          // JSON string with connection details
+  status          String          @default("active") // 'active', 'inactive', 'error'
+  lastTestedAt    DateTime?
+  metadataJson    String?         // Additional metadata
+  tags            String[]        @default([])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  retentionRules  RetentionRule[]
+  auditLogs       AuditLog[]
 
   @@map("data_sources")
 }
 
 model RetentionRule {
-  id            String          @id @default(uuid())
-  dataSourceId  String
-  dataSource    DataSource      @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
-  name          String
-  description   String?
-  action        String          // 'delete', 'anonymize', 'archive'
-  ageDays       Int             // Age threshold in days
-  filterJson    String          // JSON string with filtering logic (table, column, etc.)
-  enabled       Boolean         @default(true)
-  scheduleType  String          @default("daily") // 'daily', 'weekly', 'monthly'
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  retentionJobs RetentionJob[]
+  id                String              @id @default(uuid())
+  dataSourceId      String
+  dataSource        DataSource          @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  policyId          String?
+  policy            RetentionPolicy?    @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  name              String
+  description       String?
+  action            String              // 'delete', 'anonymize', 'archive'
+  ageDays           Int                 // Age threshold in days
+  filterJson        String              // JSON string with filtering logic (table, column, etc.)
+  enabled           Boolean             @default(true)
+  scheduleType      String              @default("daily") // 'daily', 'weekly', 'monthly'
+  cronExpression    String?             // Custom cron expression
+  priority          Int                 @default(0)
+  tags              String[]            @default([])
+  notifyOnComplete  Boolean             @default(false)
+  notifyOnFailure   Boolean             @default(true)
+  dryRun            Boolean             @default(false)
+  lastExecutedAt    DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  retentionJobs     RetentionJob[]
+  schedules         RetentionSchedule[]
+  auditLogs         AuditLog[]
 
   @@map("retention_rules")
+  @@index([enabled])
+  @@index([policyId])
 }
 
 model RetentionJob {
-  id            String          @id @default(uuid())
-  ruleId        String
-  rule          RetentionRule   @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  startedAt     DateTime        @default(now())
-  finishedAt    DateTime?
-  status        String          // 'pending', 'running', 'completed', 'failed'
-  affectedCount Int             @default(0)
-  logText       String?
-  errorMessage  String?
-  createdAt     DateTime        @default(now())
+  id              String           @id @default(uuid())
+  ruleId          String
+  rule            RetentionRule    @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  startedAt       DateTime         @default(now())
+  finishedAt      DateTime?
+  status          String           // 'pending', 'running', 'completed', 'failed'
+  affectedCount   Int              @default(0)
+  scannedCount    Int              @default(0)
+  logText         String?
+  errorMessage    String?
+  durationMs      Int?
+  archiveId       String?
+  archive         RetentionArchive? @relation(fields: [archiveId], references: [id], onDelete: SetNull)
+  metadataJson    String?
+  createdAt       DateTime         @default(now())
 
   @@map("retention_jobs")
   @@index([ruleId])
   @@index([status])
   @@index([startedAt])
+  @@index([archiveId])
+}
+
+// New entities for Phase 3
+
+model RetentionPolicy {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  description     String?
+  category        String          @default("general") // 'gdpr', 'compliance', 'performance', 'general'
+  templateJson    String          // Template configuration for rules
+  isTemplate      Boolean         @default(true)
+  tags            String[]        @default([])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  retentionRules  RetentionRule[]
+
+  @@map("retention_policies")
+}
+
+model RetentionSchedule {
+  id              String         @id @default(uuid())
+  ruleId          String
+  rule            RetentionRule  @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  cronExpression  String
+  timezone        String         @default("UTC")
+  enabled         Boolean        @default(true)
+  nextRunAt       DateTime?
+  lastRunAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("retention_schedules")
+  @@index([ruleId])
+  @@index([nextRunAt])
+}
+
+model RetentionArchive {
+  id              String         @id @default(uuid())
+  dataSourceName  String
+  tableName       String
+  recordCount     Int
+  sizeBytes       BigInt?
+  storageLocation String?        // S3 path, file path, etc.
+  storageType     String         @default("s3") // 's3', 'file', 'database'
+  compressionType String?
+  metadataJson    String?
+  ruleName        String?
+  archivedAt      DateTime       @default(now())
+  expiresAt       DateTime?
+  retentionJobs   RetentionJob[]
+
+  @@map("retention_archives")
+  @@index([dataSourceName])
+  @@index([tableName])
+  @@index([archivedAt])
+}
+
+model AuditLog {
+  id              String       @id @default(uuid())
+  entityType      String       // 'data_source', 'retention_rule', 'retention_job'
+  entityId        String
+  action          String       // 'created', 'updated', 'deleted', 'executed'
+  userId          String?      // For future auth integration
+  changes         String?      // JSON string of changes
+  metadata        String?      // JSON string of additional data
+  ipAddress       String?
+  userAgent       String?
+  timestamp       DateTime     @default(now())
+  dataSourceId    String?
+  dataSource      DataSource?  @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+  retentionRuleId String?
+  retentionRule   RetentionRule? @relation(fields: [retentionRuleId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+  @@index([entityType, entityId])
+  @@index([timestamp])
+  @@index([userId])
 }
 
 // Demo table for vertical slice
@@ -66,4 +167,5 @@ model Event {
 
   @@map("events")
   @@index([createdAt])
+  @@index([eventType])
 }

@@ -10,9 +10,21 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w admin\"",
     "build": "npm run build -w backend && npm run build -w admin",
+    "test": "npm run test -w backend",
+    "test:watch": "npm run test:watch -w backend",
+    "test:coverage": "npm run test:coverage -w backend",
+    "lint": "npm run lint -w backend",
+    "format": "npm run format -w backend",
+    "typecheck": "npm run typecheck -w backend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:push": "npm run db:push -w backend",
+    "db:seed": "npm run db:seed -w backend",
+    "db:studio": "npm run db:studio -w backend",
+    "cli": "npm run cli -w backend",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "docker:build": "docker-compose build"
   },
   "keywords": [
     "data-retention",
